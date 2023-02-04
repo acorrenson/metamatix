@@ -4,7 +4,7 @@ Import ListNotations.
 Section Model.
 
 Inductive Symbol :=
-  | Var (v : nat)
+  | Var (v : string)
   | Cst (c : string).
 
 Definition Term := list Symbol.
@@ -18,7 +18,7 @@ Record Proposition := PROP {
 
 Definition Universe := list Proposition.
 
-Fixpoint substitute (τ : Term) (σ : nat -> Term) : Term :=
+Fixpoint substitute (τ : Term) (σ : string -> Term) : Term :=
   match τ with
   | [] => []
   | Var v::τ => (σ v) ++ (substitute τ σ)
@@ -39,7 +39,7 @@ Inductive Deduce (Ω : Universe) : Context -> Term -> Prop :=
 
 Notation "U , G ⊢ t" := (Deduce U G t) (at level 80).
 
-Definition Ω := [PROP [] [Cst "a"; Var 0]].
+Definition Ω := [PROP [] [Cst "a"; Var "x"]].
 Definition τ := [Cst "a"; Cst "b"].
 
 Goal Ω, [] ⊢ τ.
@@ -56,51 +56,50 @@ End Model.
 Section Mm.
 
 Inductive Label :=
-  | TypeLbl (lbl : nat)
-  | FactLbl (lbl : nat)
-  | RuleLbl (lbl : nat).
+  | TypeLbl (lbl : string)
+  | FactLbl (lbl : string)
+  | RuleLbl (lbl : string).
 
 Inductive Statement :=
   | Ax (stmt : Term)
   | Th (stmt : Term) (proof : list Label).
 
 Record Rule := RULE {
-  type_hypothesis : list (nat * (string * nat));
-  fact_hypothesis : list (nat * Term);
+  type_hypothesis : list (string * (string * string));
+  fact_hypothesis : list (string * Term);
   statement    : Statement;
 }.
 
 Record File := FILE {
   (* variables : list nat;
   constants : list string; *)
-  rules     : list (nat * Rule);
+  rules     : list (string * Rule);
 }.
 
-Fixpoint get {A} (l : list (nat * A)) (x : nat) : option A :=
+Fixpoint get {A} (l : list (string * A)) (x : string) : option A :=
   match l with
   | [] => None
   | (y, vy)::xs =>
-    if (x =? y)%nat then
+    if (x =? y)%string then
       Some vy
     else
       get xs x
   end.
 
 Definition Stack := list Term.
-Definition Binding : Type := (nat * Term).
+Definition Binding : Type := (string * Term).
 Definition Unifier := list Binding.
 
-Fixpoint binds (u : Unifier) (x : nat) :=
+Fixpoint binds (u : Unifier) (x : string) :=
   match u with
   | [] => false
   | (v, _)::u =>
-    (x =? v)%nat || binds u x
+    (x =? v)%string || binds u x
   end.
 
-Fixpoint unify (Σ : Stack) (unifier : Unifier) (type_hyps : list (nat * (string * nat))) : option (Stack * Unifier) :=
+Fixpoint unify (Σ : Stack) (unifier : Unifier) (type_hyps : list (string * (string * string))) : option (Stack * Unifier) :=
   match Σ, type_hyps with
-  | [], [] => Some ([], [])
-  | [], _  => None
+  | _, [] => Some ([], unifier)
   | (Cst ty::τ)::Σ, (_, (ty', v))::type_hyps =>
     if binds unifier v then None
     else if (ty =? ty')%string then
@@ -109,7 +108,7 @@ Fixpoint unify (Σ : Stack) (unifier : Unifier) (type_hyps : list (nat * (string
   | _, _ => None
   end.
 
-Definition as_subst (unifier : Unifier) : (nat -> Term) :=
+Definition as_subst (unifier : Unifier) : (string -> Term) :=
   fun x =>
     match get unifier x with
     | None => [Var x]
@@ -131,7 +130,7 @@ Fixpoint term_eqb (τ1 τ2 : Term) : bool :=
   | (Cst x)::xs, (Cst y)::ys =>
     (x =? y)%string && term_eqb xs ys
   | (Var x)::xs, (Var y)::ys =>
-    (x =? y)%nat && term_eqb xs ys
+    (x =? y)%string && term_eqb xs ys
   | _, _ => false
   end.
 
@@ -139,7 +138,7 @@ Declare Scope term.
 Delimit Scope term with term.
 Notation "x =? y" := (term_eqb x y)%term.
 
-Fixpoint match_facts (Σ : Stack) (fact_hyps : list (nat * Term)) : option Stack :=
+Fixpoint match_facts (Σ : Stack) (fact_hyps : list (string * Term)) : option Stack :=
   match Σ, fact_hyps with
   | [], [] => Some []
   | τ::Σ, (_, τ')::fact_hyps =>
@@ -155,9 +154,9 @@ Inductive status :=
   | MatchingFailed
   | StackUnderflow
   | StackOverflow
-  | UndefinedType (id : nat)
-  | UndefinedFact (id : nat)
-  | UndefinedRule (id : nat)
+  | UndefinedType (id : string)
+  | UndefinedFact (id : string)
+  | UndefinedRule (id : string)
   | WrongStmt (τ : Term)
   | Assumed (τ : Term)
   | Proved (τ : Term).
@@ -213,10 +212,11 @@ Definition check (F : File) (R : Rule) : status :=
     end
   end.
 
-Example my_rule := RULE [(0, ("wff"%string, 0))] [] (Ax [Cst "a"; Var 0]).
-Example my_file := FILE [(0, my_rule)].
-Example my_thm := RULE [(0, ("wff"%string, 0))] [] (Th [Cst "a"; Var 0] [TypeLbl 0; RuleLbl 0]).
+Example my_rule := RULE [("wffx", ("wff", "x"))]%string [] (Ax [Cst "a"; Var "x"]).
+Example my_file := FILE [("rule_1", my_rule)]%string.
+Example my_thm := RULE [("wffy", ("wff", "y"))]%string [] (Th [Cst "a"; Var "y"] [TypeLbl "wffy"; RuleLbl "rule_1"]).
 Compute (check my_file my_thm).
+Compute (unify [[Cst "wff"; Var "x"]] [] [("hyp1", ("wff", "y"))])%string.
 
 End Mm.
 
