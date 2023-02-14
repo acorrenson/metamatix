@@ -97,15 +97,30 @@ Fixpoint binds (u : Unifier) (x : string) :=
     (x =? v)%string || binds u x
   end.
 
-Fixpoint unify (Σ : Stack) (unifier : Unifier) (type_hyps : list (string * (string * string))) : option (Stack * Unifier) :=
+Definition mbind [A B] (m : option A) (f : A -> option B) : option B :=
+  match m with
+  | Some a => f a
+  | None   => None
+  end.
+
+Definition mret  [A] (a : A)    : option A := Some a.
+Definition mfail [A] (u : unit) : option A := None.
+Definition when   (b : bool)   := if b then Some tt else None.
+Definition unless (b : bool)   := when (negb b).
+
+Notation "a <- x ;; y" := (mbind x (fun a => y)) (at level 80).
+Notation "x ;; y" := (mbind x (fun _ => y)) (at level 80).
+
+Fixpoint unify (Σ : Stack) (unifier : Unifier)
+               (type_hyps : list (string * (string * string)))
+             : option (Stack * Unifier) :=
   match Σ, type_hyps with
-  | _, [] => Some ([], unifier)
+  | [], [] => mret ([], unifier)
   | (Cst ty::τ)::Σ, (_, (ty', v))::type_hyps =>
-    if binds unifier v then None
-    else if (ty =? ty')%string then
-      unify Σ ((v, τ)::unifier) type_hyps
-    else None
-  | _, _ => None
+    unless (binds unifier v) ;;
+    when (ty =? ty')%string  ;;
+    unify Σ ((v, τ)::unifier) type_hyps
+  | _, _ => mfail tt
   end.
 
 Definition as_subst (unifier : Unifier) : (string -> Term) :=
