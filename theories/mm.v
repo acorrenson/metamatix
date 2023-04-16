@@ -1,57 +1,6 @@
 From Coq Require Import String List Arith Bool.
+From Metamatix Require Import model.
 Import ListNotations.
-
-Section Model.
-
-Inductive Symbol :=
-  | Var (v : string)
-  | Cst (c : string).
-
-Definition Term := list Symbol.
-
-Definition Context := list Term.
-
-Record Proposition := PROP {
-  hypothesis : Context;
-  conclusion : Term;
-}.
-
-Definition Universe := list Proposition.
-
-Fixpoint substitute (τ : Term) (σ : string -> Term) : Term :=
-  match τ with
-  | [] => []
-  | Var v::τ => (σ v) ++ (substitute τ σ)
-  | x::τ => x::(substitute τ σ)
-  end.
-
-Notation "x ∈ L" := (In x L) (at level 80).
-Notation "τ '⟨' σ '⟩'" := (substitute τ σ) (at level 80).
-
-Inductive Deduce (Ω : Universe) : Context -> Term -> Prop :=
-  | rule_axiom Γ τ :
-    τ ∈ Γ -> Deduce Ω Γ τ
-  | rule_instance Γ' τ' σ Γ τ :
-    (PROP Γ' τ') ∈ Ω ->
-    τ'⟨σ⟩ = τ ->
-    (forall h, h ∈ Γ' -> Deduce Ω Γ (h⟨σ⟩)) ->
-    Deduce Ω Γ τ.
-
-Notation "U , G ⊢ t" := (Deduce U G t) (at level 80).
-
-Definition Ω := [PROP [] [Cst "a"; Var "x"]].
-Definition τ := [Cst "a"; Cst "b"].
-
-Goal Ω, [] ⊢ τ.
-Proof.
-  eapply (rule_instance _ _ _ (fun _ => [Cst "b"])).
-  + now constructor.
-  + reflexivity.
-  + now intros.
-Qed.
-
-End Model.
-
 
 Section Mm.
 
@@ -61,12 +10,12 @@ Inductive Label :=
   | RuleLbl (lbl : string).
 
 Inductive Statement :=
-  | Ax (stmt : Term)
-  | Th (stmt : Term) (proof : list Label).
+  | Ax (stmt : Sentence)
+  | Th (stmt : Sentence) (proof : list Label).
 
 Record Rule := RULE {
-  type_hypothesis : list (string * (string * string));
-  fact_hypothesis : list (string * Term);
+  type_hypotheses : list (string * (string * string));
+  fact_hypotheses : list (string * Sentence);
   statement    : Statement;
 }.
 
@@ -86,8 +35,8 @@ Fixpoint get {A} (l : list (string * A)) (x : string) : option A :=
       get xs x
   end.
 
-Definition Stack := list Term.
-Definition Binding : Type := (string * Term).
+Definition Stack := list Sentence.
+Definition Binding : Type := (string * Sentence).
 Definition Unifier := list Binding.
 
 Fixpoint binds (u : Unifier) (x : string) :=
@@ -123,7 +72,7 @@ Fixpoint unify (Σ : Stack) (unifier : Unifier)
   | _, _ => mfail tt
   end.
 
-Definition as_subst (unifier : Unifier) : (string -> Term) :=
+Definition as_subst (unifier : Unifier) : (string -> Sentence) :=
   fun x =>
     match get unifier x with
     | None => [Var x]
@@ -139,7 +88,7 @@ Fixpoint apply_unifier (unifier : Unifier) (Σ : Stack) : Stack :=
     (substitute τ (as_subst unifier))::apply_unifier unifier Σ
   end.
 
-Fixpoint term_eqb (τ1 τ2 : Term) : bool :=
+Fixpoint term_eqb (τ1 τ2 : Sentence) : bool :=
   match τ1, τ2 with
   | [], [] => true
   | (Cst x)::xs, (Cst y)::ys =>
@@ -153,7 +102,7 @@ Declare Scope term.
 Delimit Scope term with term.
 Notation "x =? y" := (term_eqb x y)%term.
 
-Fixpoint match_facts (Σ : Stack) (fact_hyps : list (string * Term)) : option Stack :=
+Fixpoint match_facts (Σ : Stack) (fact_hyps : list (string * Sentence)) : option Stack :=
   match Σ, fact_hyps with
   | [], [] => Some []
   | τ::Σ, (_, τ')::fact_hyps =>
@@ -172,11 +121,11 @@ Inductive status :=
   | UndefinedType (id : string)
   | UndefinedFact (id : string)
   | UndefinedRule (id : string)
-  | WrongStmt (τ : Term)
-  | Assumed (τ : Term)
-  | Proved (τ : Term).
+  | WrongStmt (τ : Sentence)
+  | Assumed (τ : Sentence)
+  | Proved (τ : Sentence).
 
-Definition term (s : Statement) : Term :=
+Definition term (s : Statement) : Sentence :=
   match s with
   | Ax τ => τ
   | Th τ _ => τ
@@ -219,7 +168,7 @@ Definition check (F : File) (R : Rule) : status :=
   match statement R with
   | Ax stmt => Assumed stmt
   | Th stmt proof =>
-    match exec_proof F [] (type_hypothesis R) (fact_hypothesis R) proof with
+    match exec_proof F [] (type_hypotheses R) (fact_hypotheses R) proof with
     | Proved stmt' =>
       if (stmt =? stmt')%term then Proved stmt
       else WrongStmt stmt'
@@ -234,8 +183,3 @@ Compute (check my_file my_thm).
 Compute (unify [[Cst "wff"; Var "x"]] [] [("hyp1", ("wff", "y"))])%string.
 
 End Mm.
-
-
-Section Soundness.
-(* Definition interp_Rule (R : Rule) : Proposition := *)
-End Soundness.

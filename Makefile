@@ -1,19 +1,16 @@
-##
-## https://coq.inria.fr/refman/practical-tools/utilities.html
-##
+all: Makefile.coq
+	@+$(MAKE) -f Makefile.coq all
 
-KNOWNTARGETS := CoqMakefile
-KNOWNFILES := Makefile _CoqProject
+clean: Makefile.coq
+	@+$(MAKE) -f Makefile.coq cleanall
+	@rm -f Makefile.coq Makefile.coq.conf
 
-.DEFAULT_GOAL := invoke-coqmakefile
+Makefile.coq: _CoqProject
+	$(COQBIN)coq_makefile -f _CoqProject -o Makefile.coq
 
-CoqMakefile: Makefile _CoqProject
-	$(COQBIN)coq_makefile -f _CoqProject -o CoqMakefile
+force _CoqProject Makefile: ;
 
-invoke-coqmakefile: CoqMakefile
-	$(MAKE) --no-print-directory -f CoqMakefile $(filter-out $(KNOWNTARGETS),$(MAKECMDGOALS))
+%: Makefile.coq force
+	@+$(MAKE) -f Makefile.coq $@
 
-.PHONY: invoke-coqmakefile $(KNOWNFILES)
-
-%: invoke-coqmakefile
-	@true
+.PHONY: all clean force
