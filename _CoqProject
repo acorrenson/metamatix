@@ -1,4 +1,5 @@
 -R theories/ Metamatix
+theories/base.v
 theories/model.v
 theories/mm.v
 theories/soundness.v
